@@ -1,0 +1,496 @@
+import discord
+from discord.ext import commands, tasks
+import os
+import time
+import logging
+from dotenv import load_dotenv
+from gtts import gTTS
+import tempfile
+from collections import defaultdict
+import asyncio
+
+# Keep alive for Replit (keeps bot running 24/7)
+try:
+    from keep_alive import keep_alive
+    keep_alive()
+    print("✅ Keep-alive server started for Replit")
+except ImportError:
+    print("ℹ️ Keep-alive not needed (running locally)")
+
+# Load environment variables
+load_dotenv()
+
+# Setup logging
+logging.basicConfig(
+    level=logging.INFO, 
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
+)
+logger = logging.getLogger(__name__)
+
+# Configuration
+class Config:
+    TOKEN = os.getenv('Discord_Token')
+    PREFIX = ''  # Không có prefix, chỉ cần gõ tên lệnh
+    TIMEOUT_MINUTES = 1  # Bot tự out sau 1 phút không hoạt động
+    MAX_TEXT_LENGTH = 200
+    TEMP_DIR = tempfile.gettempdir()
+    ANNOUNCE_USERNAME = False  # Chỉ hiện tên trong chat, không đọc TTS
+
+# Setup intents
+intents = discord.Intents.default()
+intents.message_content = True
+intents.voice_states = True
+
+bot = commands.Bot(command_prefix=Config.PREFIX, intents=intents)
+
+# Bot state
+voice_clients = {}
+last_activity = defaultdict(float)
+tts_queue = defaultdict(list)
+processing = defaultdict(bool)
+
+class TTSBot:
+    def __init__(self):
+        self.temp_files = set()
+    
+    async def create_tts_audio(self, text: str, lang='vi') -> str:
+        """Create TTS audio file and return path"""
+        try:
+            # Create TTS object
+            tts = gTTS(text=text, lang=lang, slow=False)
+            
+            # Create temporary file
+            temp_file = os.path.join(Config.TEMP_DIR, f"tts_{int(time.time())}_{hash(text)}.mp3")
+            
+            # Save TTS to file
+            tts.save(temp_file)
+            self.temp_files.add(temp_file)
+            
+            logger.info(f"Created TTS file: {temp_file}")
+            return temp_file
+            
+        except Exception as e:
+            logger.error(f"Error creating TTS: {e}")
+            return None
+    
+    async def cleanup_temp_file(self, file_path: str):
+        """Clean up temporary file"""
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                self.temp_files.discard(file_path)
+                logger.info(f"Cleaned up temp file: {file_path}")
+        except Exception as e:
+            logger.error(f"Error cleaning up file {file_path}: {e}")
+    
+    async def process_tts_queue(self, guild_id: int):
+        """Process TTS queue for a specific guild"""
+        if processing[guild_id] or not tts_queue[guild_id]:
+            return
+        
+        processing[guild_id] = True
+        
+        try:
+            while tts_queue[guild_id]:
+                text, channel_id = tts_queue[guild_id].pop(0)
+                
+                if guild_id not in voice_clients:
+                    break
+                
+                voice_client = voice_clients[guild_id]
+                
+                # Create TTS audio
+                audio_file = await self.create_tts_audio(text)
+                if not audio_file:
+                    continue
+                
+                # Play audio
+                try:
+                    audio_source = discord.FFmpegPCMAudio(audio_file)
+                    voice_client.play(audio_source)
+                    
+                    # Wait for audio to finish
+                    while voice_client.is_playing():
+                        await asyncio.sleep(0.1)
+                    
+                    # Update last activity
+                    last_activity[guild_id] = time.time()
+                    
+                except Exception as e:
+                    logger.error(f"Error playing audio: {e}")
+                
+                finally:
+                    # Clean up temp file
+                    await self.cleanup_temp_file(audio_file)
+                
+                # Small delay between messages
+                await asyncio.sleep(0.5)
+        
+        except Exception as e:
+            logger.error(f"Error processing TTS queue: {e}")
+        
+        finally:
+            processing[guild_id] = False
+
+# Create TTS bot instance
+tts_bot = TTSBot()
+
+@bot.event
+async def on_ready():
+    logger.info(f'{bot.user} đã kết nối thành công!')
+    logger.info(f'Bot đang hoạt động trên {len(bot.guilds)} server(s)')
+    
+    # Start cleanup task
+    cleanup_inactive_connections.start()
+
+@bot.event
+async def on_voice_state_update(member, before, after):
+    """Handle voice state updates"""
+    if member == bot.user:
+        return
+    
+    # If user left the channel and bot is in a voice channel
+    if before.channel and bot.user in before.channel.members:
+        # Check if bot is alone in the channel (no human members)
+        human_members = [m for m in before.channel.members if not m.bot]
+        if len(human_members) == 0:
+            guild_id = before.channel.guild.id
+            # Disconnect immediately when alone
+            if guild_id in voice_clients:
+                try:
+                    await voice_clients[guild_id].disconnect()
+                    logger.info(f"Auto-disconnected from {before.channel.name} - no members left")
+                    
+                    # Clean up
+                    del voice_clients[guild_id]
+                    if guild_id in last_activity:
+                        del last_activity[guild_id]
+                    if guild_id in tts_queue:
+                        tts_queue[guild_id].clear()
+                except Exception as e:
+                    logger.error(f"Error auto-disconnecting: {e}")
+
+@bot.command(name='tts', aliases=['t', 'speak'])
+async def text_to_speech(ctx, *, text: str = None):
+    """Main TTS command"""
+    if not text:
+        embed = discord.Embed(
+            title="❌ Lỗi",
+            description="Vui lòng nhập văn bản cần đọc!\nVí dụ: `!tts Xin chào mọi người`",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Check text length
+    if len(text) > Config.MAX_TEXT_LENGTH:
+        embed = discord.Embed(
+            title="❌ Văn bản quá dài",
+            description=f"Văn bản không được vượt quá {Config.MAX_TEXT_LENGTH} ký tự.\nHiện tại: {len(text)} ký tự",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    # Check if user is in voice channel
+    if not ctx.author.voice:
+        embed = discord.Embed(
+            title="❌ Lỗi",
+            description="Bạn cần vào voice channel trước khi sử dụng TTS!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    voice_channel = ctx.author.voice.channel
+    guild_id = ctx.guild.id
+    
+    try:
+        # Check if bot is in different voice channel
+        if guild_id in voice_clients and voice_clients[guild_id].is_connected():
+            current_channel = voice_clients[guild_id].channel
+            if current_channel.id != voice_channel.id:
+                # Bot is in different channel
+                embed = discord.Embed(
+                    title="⚠️ Tôi đang bận rồi!",
+                    description=f"🔊 Tôi đang hoạt động ở: **{current_channel.name}**\n\n💡 Vào channel đó hoặc đợi tôi rảnh nhé!",
+                    color=discord.Color.orange()
+                )
+                await ctx.send(embed=embed)
+                return
+        
+        # Connect to voice channel if not already connected
+        if guild_id not in voice_clients or not voice_clients[guild_id].is_connected():
+            voice_client = await voice_channel.connect()
+            voice_clients[guild_id] = voice_client
+            
+            embed = discord.Embed(
+                title="🔊 Đã kết nối",
+                description=f"Đã kết nối vào **{voice_channel.name}**",
+                color=discord.Color.green()
+            )
+            await ctx.send(embed=embed)
+        
+        # Bot chỉ đọc text thuần, không đọc tên người dùng
+        full_text = text
+        
+        # Add to queue with full text
+        tts_queue[guild_id].append((full_text, ctx.channel.id))
+        last_activity[guild_id] = time.time()
+        
+        # Show queue status - Hiện tên người dùng trong chat (không đọc TTS)
+        queue_length = len(tts_queue[guild_id])
+        if queue_length > 1:
+            embed = discord.Embed(
+                title="📝 Đã thêm vào hàng đợi",
+                description=f"👤 **{ctx.author.display_name}**: `{text[:50]}{'...' if len(text) > 50 else ''}`\n📍 Vị trí: {queue_length}",
+                color=discord.Color.blue()
+            )
+        else:
+            embed = discord.Embed(
+                title="🔊 Đang phát",
+                description=f"👤 **{ctx.author.display_name}**: `{text[:50]}{'...' if len(text) > 50 else ''}`",
+                color=discord.Color.green()
+            )
+        
+        await ctx.send(embed=embed)
+        
+        # Process queue
+        await tts_bot.process_tts_queue(guild_id)
+        
+    except discord.errors.ClientException as e:
+        if "already connected" in str(e):
+            # Bot is already connected to a different channel
+            current_channel = voice_clients[guild_id].channel
+            embed = discord.Embed(
+                title="⚠️ Cảnh báo",
+                description=f"Bot đang hoạt động trong **{current_channel.name}**\nHãy vào channel đó hoặc đợi bot rảnh!",
+                color=discord.Color.orange()
+            )
+            await ctx.send(embed=embed)
+        else:
+            logger.error(f"Discord client error: {e}")
+            embed = discord.Embed(
+                title="❌ Lỗi kết nối",
+                description="Không thể kết nối vào voice channel. Vui lòng thử lại!",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
+    
+    except Exception as e:
+        logger.error(f"Error in TTS command: {e}")
+        embed = discord.Embed(
+            title="❌ Lỗi",
+            description="Đã xảy ra lỗi khi xử lý TTS. Vui lòng thử lại!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+
+@bot.command(name='skip', aliases=['s', 'next'])
+async def skip_tts(ctx):
+    """Skip current TTS"""
+    guild_id = ctx.guild.id
+    
+    if guild_id not in voice_clients:
+        embed = discord.Embed(
+            title="❌ Lỗi",
+            description="Bot không có trong voice channel nào!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    voice_client = voice_clients[guild_id]
+    
+    if voice_client.is_playing():
+        voice_client.stop()
+        embed = discord.Embed(
+            title="⏭️ Đã bỏ qua",
+            description="Đã bỏ qua TTS hiện tại",
+            color=discord.Color.green()
+        )
+    else:
+        embed = discord.Embed(
+            title="ℹ️ Thông báo",
+            description="Bot không đang phát âm thanh nào",
+            color=discord.Color.blue()
+        )
+    
+    await ctx.send(embed=embed)
+
+@bot.command(name='queue', aliases=['q'])
+async def show_queue(ctx):
+    """Show TTS queue"""
+    guild_id = ctx.guild.id
+    
+    if not tts_queue[guild_id]:
+        embed = discord.Embed(
+            title="📝 Hàng đợi TTS",
+            description="Hàng đợi trống",
+            color=discord.Color.blue()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    queue_text = ""
+    for i, (text, channel_id) in enumerate(tts_queue[guild_id][:10], 1):
+        queue_text += f"**{i}.** `{text[:50]}{'...' if len(text) > 50 else ''}`\n"
+    
+    if len(tts_queue[guild_id]) > 10:
+        queue_text += f"\n... và {len(tts_queue[guild_id]) - 10} mục khác"
+    
+    embed = discord.Embed(
+        title="📝 Hàng đợi TTS",
+        description=queue_text,
+        color=discord.Color.blue()
+    )
+    embed.set_footer(text=f"Tổng cộng: {len(tts_queue[guild_id])} mục")
+    
+    await ctx.send(embed=embed)
+
+@bot.command(name='clear', aliases=['c'])
+async def clear_queue(ctx):
+    """Clear TTS queue"""
+    guild_id = ctx.guild.id
+    
+    if not tts_queue[guild_id]:
+        embed = discord.Embed(
+            title="ℹ️ Thông báo",
+            description="Hàng đợi đã trống",
+            color=discord.Color.blue()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    cleared_count = len(tts_queue[guild_id])
+    tts_queue[guild_id].clear()
+    
+    embed = discord.Embed(
+        title="🗑️ Đã xóa",
+        description=f"Đã xóa {cleared_count} mục trong hàng đợi",
+        color=discord.Color.green()
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name='leave', aliases=['disconnect', 'bye'])
+async def leave_voice(ctx):
+    """Leave voice channel"""
+    guild_id = ctx.guild.id
+    
+    if guild_id not in voice_clients:
+        embed = discord.Embed(
+            title="❌ Lỗi",
+            description="Bot không có trong voice channel nào!",
+            color=discord.Color.red()
+        )
+        await ctx.send(embed=embed)
+        return
+    
+    voice_client = voice_clients[guild_id]
+    channel_name = voice_client.channel.name
+    
+    # Clear queue and disconnect
+    tts_queue[guild_id].clear()
+    await voice_client.disconnect()
+    del voice_clients[guild_id]
+    
+    if guild_id in last_activity:
+        del last_activity[guild_id]
+    
+    embed = discord.Embed(
+        title="👋 Đã rời khỏi",
+        description=f"Đã rời khỏi **{channel_name}**",
+        color=discord.Color.green()
+    )
+    await ctx.send(embed=embed)
+
+@bot.command(name='huongdan', aliases=['hd', 'guide'])
+async def help_command(ctx):
+    """Show help message"""
+    embed = discord.Embed(
+        title="🤖 Hướng dẫn sử dụng TTS Bot",
+        description="Bot Text-to-Speech tiếng Việt với các lệnh sau:",
+        color=discord.Color.blue()
+    )
+    
+    commands_list = [
+        ("**tts <văn bản>**", "Đọc văn bản bằng tiếng Việt\nVí dụ: `tts Xin chào mọi người`"),
+        ("**skip** hoặc **s**", "Bỏ qua TTS hiện tại"),
+        ("**queue** hoặc **q**", "Xem hàng đợi TTS"),
+        ("**clear** hoặc **c**", "Xóa hàng đợi TTS"),
+        ("**leave**", "Bot rời khỏi voice channel"),
+        ("**huongdan**", "Hiển thị trợ giúp này")
+    ]
+    
+    for command, description in commands_list:
+        embed.add_field(name=command, value=description, inline=False)
+    
+    embed.add_field(
+        name="ℹ️ Lưu ý:",
+        value=f"• Văn bản tối đa {Config.MAX_TEXT_LENGTH} ký tự\n• Bot tự động rời sau 1 phút không hoạt động\n• Bot tự động rời khi không còn ai trong voice\n• Tên người dùng chỉ hiện trong chat, bot không đọc\n• Bot hoạt động trên nhiều server cùng lúc",
+        inline=False
+    )
+    
+    embed.set_footer(text="Bot TTS đơn giản • Dùng lệnh 'huongdan' để xem hướng dẫn")
+    await ctx.send(embed=embed)
+
+@tasks.loop(minutes=1)
+async def cleanup_inactive_connections():
+    """Clean up inactive voice connections"""
+    current_time = time.time()
+    to_remove = []
+    
+    for guild_id, voice_client in voice_clients.items():
+        # Check if connection is still valid
+        if not voice_client.is_connected():
+            to_remove.append(guild_id)
+            continue
+        
+        # Check inactivity timeout
+        if guild_id in last_activity:
+            inactive_time = current_time - last_activity[guild_id]
+            if inactive_time > (Config.TIMEOUT_MINUTES * 60):
+                try:
+                    channel_name = voice_client.channel.name
+                    await voice_client.disconnect()
+                    logger.info(f"Auto-disconnected from {channel_name} due to inactivity")
+                except:
+                    pass
+                to_remove.append(guild_id)
+    
+    # Clean up disconnected clients
+    for guild_id in to_remove:
+        if guild_id in voice_clients:
+            del voice_clients[guild_id]
+        if guild_id in last_activity:
+            del last_activity[guild_id]
+        if guild_id in tts_queue:
+            tts_queue[guild_id].clear()
+        if guild_id in processing:
+            processing[guild_id] = False
+
+@bot.event
+async def on_command_error(ctx, error):
+    """Handle command errors"""
+    if isinstance(error, commands.CommandNotFound):
+        return  # Ignore unknown commands
+    
+    logger.error(f"Command error: {error}")
+    
+    embed = discord.Embed(
+        title="❌ Lỗi",
+        description="Đã xảy ra lỗi khi thực hiện lệnh. Vui lòng thử lại!",
+        color=discord.Color.red()
+    )
+    await ctx.send(embed=embed)
+
+# Run the bot
+if __name__ == "__main__":
+    if not Config.TOKEN:
+        logger.error("Discord token not found in .env file!")
+    else:
+        try:
+            bot.run(Config.TOKEN)
+        except Exception as e:
+            logger.error(f"Failed to start bot: {e}")
