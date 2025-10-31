@@ -36,6 +36,19 @@ class Config:
     MAX_TEXT_LENGTH = 200
     TEMP_DIR = tempfile.gettempdir()
     ANNOUNCE_USERNAME = False  # Chỉ hiện tên trong chat, không đọc TTS
+    DEFAULT_LANGUAGE = 'vi'    # Ngôn ngữ mặc định
+
+# Ngôn ngữ hỗ trợ (mã ngắn -> mã gTTS)
+SUPPORTED_LANGS = {
+    'vi': 'vi',
+    'en': 'en',
+    'ja': 'ja',
+    'ko': 'ko',
+    'fr': 'fr',
+    'de': 'de',
+    'es': 'es',
+    'zh': 'zh-CN'
+}
 
 # Setup intents
 intents = discord.Intents.default()
@@ -47,7 +60,7 @@ bot = commands.Bot(command_prefix=Config.PREFIX, intents=intents)
 # Bot state
 voice_clients = {}
 last_activity = defaultdict(float)
-tts_queue = defaultdict(list)
+tts_queue = defaultdict(list)  # mỗi phần tử: (text, channel_id, lang)
 processing = defaultdict(bool)
 
 class TTSBot:
@@ -93,7 +106,13 @@ class TTSBot:
         
         try:
             while tts_queue[guild_id]:
-                text, channel_id = tts_queue[guild_id].pop(0)
+                item = tts_queue[guild_id].pop(0)
+                # Backward compatible: (text, channel_id) hoặc (text, channel_id, lang)
+                if len(item) == 2:
+                    text, channel_id = item
+                    lang = Config.DEFAULT_LANGUAGE
+                else:
+                    text, channel_id, lang = item
                 
                 if guild_id not in voice_clients:
                     break
@@ -101,7 +120,7 @@ class TTSBot:
                 voice_client = voice_clients[guild_id]
                 
                 # Create TTS audio
-                audio_file = await self.create_tts_audio(text)
+                audio_file = await self.create_tts_audio(text, lang=lang)
                 if not audio_file:
                     continue
                 
@@ -232,11 +251,31 @@ async def text_to_speech(ctx, *, text: str = None):
             )
             await ctx.send(embed=embed)
         
-        # Bot chỉ đọc text thuần, không đọc tên người dùng
-        full_text = text
+        # Phân tích ngôn ngữ ở đầu câu: ví dụ "en hello" -> lang=en, content="hello"
+        detected_lang = Config.DEFAULT_LANGUAGE
+        content = text.strip()
+        if ' ' in content:
+            maybe_code, rest = content.split(' ', 1)
+            code = maybe_code.lower()
+            if code in SUPPORTED_LANGS and rest.strip():
+                detected_lang = SUPPORTED_LANGS[code]
+                content = rest.strip()
+
+        # Re-check text length after removing lang code
+        if len(content) > Config.MAX_TEXT_LENGTH:
+            embed = discord.Embed(
+                title="❌ Văn bản quá dài",
+                description=f"Văn bản không được vượt quá {Config.MAX_TEXT_LENGTH} ký tự.\nHiện tại: {len(content)} ký tự",
+                color=discord.Color.red()
+            )
+            await ctx.send(embed=embed)
+            return
+
+        # Bot chỉ đọc text thuần (không đọc tên người dùng)
+        full_text = content
         
-        # Add to queue with full text
-        tts_queue[guild_id].append((full_text, ctx.channel.id))
+        # Add to queue with full text và ngôn ngữ
+        tts_queue[guild_id].append((full_text, ctx.channel.id, detected_lang))
         last_activity[guild_id] = time.time()
         
         # Show queue status - Hiện tên người dùng trong chat (không đọc TTS)
@@ -244,13 +283,13 @@ async def text_to_speech(ctx, *, text: str = None):
         if queue_length > 1:
             embed = discord.Embed(
                 title="📝 Đã thêm vào hàng đợi",
-                description=f"👤 **{ctx.author.display_name}**: `{text[:50]}{'...' if len(text) > 50 else ''}`\n📍 Vị trí: {queue_length}",
+                description=f"👤 **{ctx.author.display_name}**: `{content[:50]}{'...' if len(content) > 50 else ''}`\n🌐 Ngôn ngữ: `{detected_lang}`\n📍 Vị trí: {queue_length}",
                 color=discord.Color.blue()
             )
         else:
             embed = discord.Embed(
                 title="🔊 Đang phát",
-                description=f"👤 **{ctx.author.display_name}**: `{text[:50]}{'...' if len(text) > 50 else ''}`",
+                description=f"👤 **{ctx.author.display_name}**: `{content[:50]}{'...' if len(content) > 50 else ''}`\n🌐 Ngôn ngữ: `{detected_lang}`",
                 color=discord.Color.green()
             )
         
@@ -334,8 +373,13 @@ async def show_queue(ctx):
         return
     
     queue_text = ""
-    for i, (text, channel_id) in enumerate(tts_queue[guild_id][:10], 1):
-        queue_text += f"**{i}.** `{text[:50]}{'...' if len(text) > 50 else ''}`\n"
+    for i, item in enumerate(tts_queue[guild_id][:10], 1):
+        if len(item) == 2:
+            text_item, _ = item
+            lang = Config.DEFAULT_LANGUAGE
+        else:
+            text_item, _, lang = item
+        queue_text += f"**{i}.** `{text_item[:50]}{'...' if len(text_item) > 50 else ''}` • 🌐 `{lang}`\n"
     
     if len(tts_queue[guild_id]) > 10:
         queue_text += f"\n... và {len(tts_queue[guild_id]) - 10} mục khác"

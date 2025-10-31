@@ -16,6 +16,7 @@ Bot Discord Text-to-Speech đơn giản, ổn định, có thể chạy 24/7 mi�
 
 ```
 tts xin chào         # Đọc văn bản (chỉ đọc nội dung)
+tts en hello         # Đọc tiếng Anh (hỗ trợ: vi, en, ja, ko, fr, de, es, zh)
 skip                 # Bỏ qua TTS hiện tại
 queue                # Xem hàng đợi
 clear                # Xóa hàng đợi
