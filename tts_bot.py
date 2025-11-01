@@ -162,10 +162,9 @@ class TTSBot:
                 
                 # Play audio
                 try:
-                    # FFmpeg options for better compatibility with hosting environments
+                    # FFmpeg options (simple, compatible with all versions)
                     ffmpeg_options = {
-                        'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
-                        'options': '-vn -loglevel warning'
+                        'options': '-vn'
                     }
                     
                     audio_source = discord.FFmpegPCMAudio(
