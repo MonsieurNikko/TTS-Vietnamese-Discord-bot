@@ -8,14 +8,15 @@ from gtts import gTTS
 import tempfile
 from collections import defaultdict
 import asyncio
+import subprocess
+import shutil
 
-# Keep alive for Replit (keeps bot running 24/7)
+# Keep alive for hosting platforms (optional)
 try:
     from keep_alive import keep_alive
     keep_alive()
-    print("✅ Keep-alive server started for Replit")
 except ImportError:
-    print("ℹ️ Keep-alive not needed (running locally)")
+    pass  # Not needed for most hosting platforms
 
 # Load environment variables
 load_dotenv()
@@ -27,6 +28,41 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
+
+# Check FFmpeg availability
+def check_ffmpeg():
+    """Check if ffmpeg is installed"""
+    if shutil.which('ffmpeg'):
+        logger.info("✅ FFmpeg found")
+        return True
+    logger.error("❌ FFmpeg not found! Install: apt-get install ffmpeg")
+    return False
+
+def check_opus():
+    """Check and load Opus library"""
+    try:
+        if not discord.opus.is_loaded():
+            # Try common opus library locations
+            for lib in ['libopus.so.0', '/usr/lib/x86_64-linux-gnu/libopus.so.0', 
+                       '/usr/lib/libopus.so.0', 'opus.dll', 'libopus-0.dll']:
+                try:
+                    discord.opus.load_opus(lib)
+                    if discord.opus.is_loaded():
+                        logger.info(f"✅ Opus loaded: {lib}")
+                        return True
+                except:
+                    continue
+            logger.error("❌ Opus NOT loaded! Install: apt-get install libopus0")
+            return False
+        logger.info("✅ Opus already loaded")
+        return True
+    except Exception as e:
+        logger.error(f"❌ Opus error: {e}")
+        return False
+
+# Check dependencies on startup
+check_ffmpeg()
+check_opus()
 
 # Configuration
 class Config:
@@ -126,18 +162,42 @@ class TTSBot:
                 
                 # Play audio
                 try:
-                    audio_source = discord.FFmpegPCMAudio(audio_file)
-                    voice_client.play(audio_source)
+                    # FFmpeg options for better compatibility with hosting environments
+                    ffmpeg_options = {
+                        'before_options': '-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5',
+                        'options': '-vn -loglevel warning'
+                    }
                     
-                    # Wait for audio to finish
-                    while voice_client.is_playing():
-                        await asyncio.sleep(0.1)
+                    audio_source = discord.FFmpegPCMAudio(
+                        audio_file,
+                        **ffmpeg_options
+                    )
+                    
+                    # Create done event
+                    done = asyncio.Event()
+                    
+                    def after_playing(error):
+                        if error:
+                            logger.error(f"Error in audio playback: {error}")
+                        done.set()
+                    
+                    voice_client.play(audio_source, after=after_playing)
+                    
+                    # Wait for audio to finish with timeout
+                    try:
+                        await asyncio.wait_for(done.wait(), timeout=30.0)
+                    except asyncio.TimeoutError:
+                        logger.warning("Audio playback timed out")
+                        if voice_client.is_playing():
+                            voice_client.stop()
                     
                     # Update last activity
                     last_activity[guild_id] = time.time()
                     
+                except discord.ClientException as e:
+                    logger.error(f"Discord client error playing audio: {e}")
                 except Exception as e:
-                    logger.error(f"Error playing audio: {e}")
+                    logger.error(f"Error playing audio: {e}", exc_info=True)
                 
                 finally:
                     # Clean up temp file

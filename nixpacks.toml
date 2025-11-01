@@ -1,0 +1,8 @@
+[phases.setup]
+nixPkgs = ["ffmpeg", "libopus"]
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
+
+[start]
+cmd = "python tts_bot.py"
