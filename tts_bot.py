@@ -11,13 +11,6 @@ import asyncio
 import subprocess
 import shutil
 
-# Keep alive for hosting platforms (optional)
-try:
-    from keep_alive import keep_alive
-    keep_alive()
-except ImportError:
-    pass  # Not needed for most hosting platforms
-
 # Load environment variables
 load_dotenv()
 
