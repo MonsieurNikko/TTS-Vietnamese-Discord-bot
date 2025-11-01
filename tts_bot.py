@@ -506,29 +506,63 @@ async def help_command(ctx):
     """Show help message"""
     embed = discord.Embed(
         title="🤖 Hướng dẫn sử dụng TTS Bot",
-        description="Bot Text-to-Speech tiếng Việt với các lệnh sau:",
+        description="Bot Text-to-Speech hỗ trợ 8 ngôn ngữ với các lệnh sau:",
         color=discord.Color.blue()
     )
     
-    commands_list = [
-        ("**tts <văn bản>**", "Đọc văn bản bằng tiếng Việt\nVí dụ: `tts Xin chào mọi người`"),
-        ("**skip** hoặc **s**", "Bỏ qua TTS hiện tại"),
-        ("**queue** hoặc **q**", "Xem hàng đợi TTS"),
-        ("**clear** hoặc **c**", "Xóa hàng đợi TTS"),
-        ("**leave**", "Bot rời khỏi voice channel"),
-        ("**huongdan**", "Hiển thị trợ giúp này")
-    ]
-    
-    for command, description in commands_list:
-        embed.add_field(name=command, value=description, inline=False)
-    
+    # Lệnh TTS cơ bản
     embed.add_field(
-        name="ℹ️ Lưu ý:",
-        value=f"• Văn bản tối đa {Config.MAX_TEXT_LENGTH} ký tự\n• Bot tự động rời sau 1 phút không hoạt động\n• Bot tự động rời khi không còn ai trong voice\n• Tên người dùng chỉ hiện trong chat, bot không đọc\n• Bot hoạt động trên nhiều server cùng lúc",
+        name="**🎤 TTS cơ bản**",
+        value="**tts <văn bản>** - Đọc bằng tiếng Việt (mặc định)\nVí dụ: `tts Xin chào mọi người`\n`tts Hôm nay trời đẹp quá`",
         inline=False
     )
     
-    embed.set_footer(text="Bot TTS đơn giản • Dùng lệnh 'huongdan' để xem hướng dẫn")
+    # TTS với ngôn ngữ khác
+    embed.add_field(
+        name="**🌐 TTS đa ngôn ngữ**",
+        value="**tts <mã_ngôn_ngữ> <văn bản>** - Đọc bằng ngôn ngữ chỉ định\n\n"
+              "**Danh sách ngôn ngữ:**\n"
+              "• `vi` - Tiếng Việt (mặc định)\n"
+              "• `en` - English (Tiếng Anh)\n"
+              "• `ja` - 日本語 (Tiếng Nhật)\n"
+              "• `ko` - 한국어 (Tiếng Hàn)\n"
+              "• `fr` - Français (Tiếng Pháp)\n"
+              "• `de` - Deutsch (Tiếng Đức)\n"
+              "• `es` - Español (Tiếng Tây Ban Nha)\n"
+              "• `zh` - 中文 (Tiếng Trung)\n\n"
+              "**Ví dụ:**\n"
+              "`tts en hello everyone`\n"
+              "`tts ja こんにちは`\n"
+              "`tts ko 안녕하세요`\n"
+              "`tts fr bonjour`",
+        inline=False
+    )
+    
+    # Lệnh quản lý
+    commands_list = [
+        ("**skip** hoặc **s**", "Bỏ qua TTS đang phát hiện tại"),
+        ("**queue** hoặc **q**", "Xem danh sách TTS đang chờ"),
+        ("**clear** hoặc **c**", "Xóa toàn bộ hàng đợi TTS"),
+        ("**leave**", "Bot rời khỏi voice channel"),
+    ]
+    
+    embed.add_field(
+        name="**⚙️ Quản lý Queue**",
+        value="\n".join([f"{cmd} - {desc}" for cmd, desc in commands_list]),
+        inline=False
+    )
+    
+    embed.add_field(
+        name="ℹ️ Lưu ý:",
+        value=f"• Văn bản tối đa {Config.MAX_TEXT_LENGTH} ký tự\n"
+              "• Bot tự động rời sau 1 phút không hoạt động\n"
+              "• Bot tự động rời khi không còn ai trong voice\n"
+              "• Nếu không ghi mã ngôn ngữ, bot sẽ đọc tiếng Việt\n"
+              "• Bot hoạt động trên nhiều server cùng lúc",
+        inline=False
+    )
+    
+    embed.set_footer(text="Bot TTS đa ngôn ngữ 🌏 • Gõ !huongdan để xem hướng dẫn")
     await ctx.send(embed=embed)
 
 @tasks.loop(minutes=1)
