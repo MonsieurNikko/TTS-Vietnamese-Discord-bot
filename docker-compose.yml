@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  tts-bot:
+    build: .
+    container_name: discord-tts-bot
+    restart: unless-stopped
+    environment:
+      - Discord_Token=${Discord_Token}
+    volumes:
+      - /tmp:/tmp

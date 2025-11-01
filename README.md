@@ -23,20 +23,24 @@ leave           # Rời channel
 
 ## 🚀 Deploy nhanh
 
-### Railway (Khuyến nghị) ⭐
+### Cybrance (Khuyến nghị) ⭐
 1. Fork repo này
-2. Tạo project mới trên [Railway](https://railway.app)
-3. Connect GitHub repo
-4. Thêm biến môi trường: `Discord_Token`
-5. Deploy tự động!
+2. Tạo project mới trên [Cybrance](https://cybrance.com)
+3. Import from GitHub
+4. Thêm env var: `Discord_Token`
+5. Deploy! (Dockerfile auto-detected)
 
-Files đã config: `railway.json`, `nixpacks.toml`, `Procfile`
+👉 **Chi tiết:** [CYBRANCE_DEPLOY.md](./CYBRANCE_DEPLOY.md)
+
+### Railway
+1. New Project → From GitHub
+2. Add env: `Discord_Token`
+3. Auto deploy
 
 ### Render / Heroku
 1. Upload code
 2. Set environment: `Discord_Token`
-3. Sử dụng `Dockerfile` để build
-4. Deploy
+3. Dockerfile auto-build
 
 ### Yêu cầu hệ thống
 - Python 3.11+
