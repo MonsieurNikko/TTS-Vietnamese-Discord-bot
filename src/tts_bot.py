@@ -11,8 +11,49 @@ import asyncio
 import subprocess
 import shutil
 
-# Load environment variables
-load_dotenv()
+# Load environment variables with smart detection
+def load_environment():
+    """Load environment variables from appropriate .env file"""
+    # Priority order:
+    # 1. ENV environment variable (e.g., ENV=dev, ENV=prod)
+    # 2. .env.dev if exists (development)
+    # 3. .env.prod if exists (production)
+    # 4. .env (default)
+    
+    env_mode = os.getenv('ENV', '').lower()
+    
+    # Check parent directory (project root)
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    
+    env_files = []
+    
+    if env_mode == 'dev':
+        env_files.append(os.path.join(root_dir, '.env.dev'))
+    elif env_mode == 'prod':
+        env_files.append(os.path.join(root_dir, '.env.prod'))
+    else:
+        # Auto-detect: prefer .env.dev if exists (development mode)
+        env_files.append(os.path.join(root_dir, '.env.dev'))
+        env_files.append(os.path.join(root_dir, '.env.prod'))
+    
+    # Always fallback to .env
+    env_files.append(os.path.join(root_dir, '.env'))
+    
+    # Load first existing file
+    for env_file in env_files:
+        if os.path.exists(env_file):
+            load_dotenv(env_file)
+            env_name = os.path.basename(env_file)
+            print(f"📝 Loaded environment from: {env_name}")
+            return env_name
+    
+    # No .env file found, try load_dotenv() default
+    load_dotenv()
+    print("📝 Using default environment variables")
+    return "default"
+
+# Load environment
+loaded_env = load_environment()
 
 # Setup logging
 logging.basicConfig(

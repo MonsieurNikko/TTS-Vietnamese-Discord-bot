@@ -21,18 +21,12 @@ if (-Not (Test-Path "venv\Scripts\Activate.ps1")) {
 Write-Host "📦 Activating virtual environment..." -ForegroundColor Cyan
 & ".\venv\Scripts\Activate.ps1"
 
-# Load .env.dev
-Write-Host "🔑 Loading DEV configuration..." -ForegroundColor Cyan
-Get-Content .env.dev | ForEach-Object {
-    if ($_ -match '^([^=]+)=(.*)$') {
-        $name = $matches[1].Trim()
-        $value = $matches[2].Trim()
-        Set-Item -Path "env:$name" -Value $value
-    }
-}
+# Set ENV=dev for explicit mode (optional, bot auto-detects .env.dev)
+$env:ENV = "dev"
 
-# Run bot
+# Run bot (will auto-load .env.dev)
 Write-Host "🤖 Starting bot from src/tts_bot.py..." -ForegroundColor Green
+Write-Host "Bot will auto-load .env.dev file" -ForegroundColor Cyan
 Write-Host "Press Ctrl+C to stop" -ForegroundColor Yellow
 Write-Host ""
 
