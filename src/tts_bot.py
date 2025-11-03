@@ -283,7 +283,7 @@ async def on_voice_state_update(member, before, after):
                 except Exception as e:
                     logger.error(f"Error auto-disconnecting: {e}")
 
-@bot.command(name='tts', aliases=['t', 'speak'])
+@bot.command(name='tts', aliases=['Tts', 'TTS'])
 async def text_to_speech(ctx, *, text: str = None):
     """Main TTS command"""
     if not text:
