@@ -10,6 +10,9 @@ from collections import defaultdict
 import asyncio
 import subprocess
 import shutil
+import json
+import glob
+from pathlib import Path
 
 # Load environment variables with smart detection
 def load_environment():
@@ -57,13 +60,80 @@ def load_environment():
 # Load environment
 loaded_env = load_environment()
 
+# Determine bot priority from loaded environment
+BOT_PRIORITY = 999  # Default: lowest priority
+if loaded_env.startswith('.env.bot'):
+    try:
+        bot_num = loaded_env.replace('.env.bot', '')
+        BOT_PRIORITY = int(bot_num)
+    except:
+        BOT_PRIORITY = 999
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO, 
-    format='%(asctime)s - %(levelname)s - %(message)s',
+    format=f'%(asctime)s - [BOT {BOT_PRIORITY}] - %(levelname)s - %(message)s',
     handlers=[logging.StreamHandler()]
 )
 logger = logging.getLogger(__name__)
+
+# Multi-bot coordination file
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BOT_STATUS_FILE = os.path.join(PROJECT_ROOT, 'bot_status.json')
+
+def get_bot_status():
+    """Read current bot status from coordination file"""
+    try:
+        if os.path.exists(BOT_STATUS_FILE):
+            with open(BOT_STATUS_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                # Clean old entries (>5 seconds old)
+                current_time = time.time()
+                data = {k: v for k, v in data.items() if current_time - v.get('last_update', 0) < 5}
+                return data
+    except Exception as e:
+        logger.error(f"Error reading bot status: {e}")
+    return {}
+
+def update_bot_status(guild_id, is_busy):
+    """Update this bot's status in coordination file"""
+    try:
+        status = get_bot_status()
+        bot_key = f"bot{BOT_PRIORITY}"
+        
+        if is_busy:
+            status[bot_key] = {
+                'priority': BOT_PRIORITY,
+                'guild_id': guild_id,
+                'is_busy': True,
+                'last_update': time.time()
+            }
+        else:
+            # Remove this bot's status when not busy
+            status.pop(bot_key, None)
+        
+        with open(BOT_STATUS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(status, f, indent=2)
+    except Exception as e:
+        logger.error(f"Error updating bot status: {e}")
+
+def should_this_bot_respond(guild_id):
+    """Check if this bot should respond based on priority"""
+    status = get_bot_status()
+    
+    # Check if any higher priority bot is handling this guild
+    for bot_key, bot_data in status.items():
+        if bot_data.get('guild_id') == guild_id:
+            bot_priority = bot_data.get('priority', 999)
+            if bot_priority < BOT_PRIORITY:
+                # Higher priority bot is already handling this
+                logger.info(f"Higher priority bot (Bot {bot_priority}) is handling guild {guild_id}")
+                return False
+    
+    # No higher priority bot is handling this guild
+    return True
+
+logger.info(f"🎯 Bot Priority: {BOT_PRIORITY}")
 
 # Check FFmpeg availability
 def check_ffmpeg():
@@ -282,12 +352,23 @@ async def on_voice_state_update(member, before, after):
                         del last_activity[guild_id]
                     if guild_id in tts_queue:
                         tts_queue[guild_id].clear()
+                    
+                    # 🎯 Mark bot as not busy
+                    update_bot_status(guild_id, is_busy=False)
                 except Exception as e:
                     logger.error(f"Error auto-disconnecting: {e}")
 
 @bot.command(name='tts', aliases=['Tts', 'TTS'])
 async def text_to_speech(ctx, *, text: str = None):
     """Main TTS command"""
+    guild_id = ctx.guild.id
+    
+    # 🎯 MULTI-BOT PRIORITY CHECK
+    if not should_this_bot_respond(guild_id):
+        # Higher priority bot is handling this guild - silently ignore
+        logger.info(f"Skipping TTS request - higher priority bot is active")
+        return
+    
     if not text:
         embed = discord.Embed(
             title="❌ Lỗi",
@@ -318,21 +399,24 @@ async def text_to_speech(ctx, *, text: str = None):
         return
     
     voice_channel = ctx.author.voice.channel
-    guild_id = ctx.guild.id
     
     try:
         # Check if bot is in different voice channel
         if guild_id in voice_clients and voice_clients[guild_id].is_connected():
             current_channel = voice_clients[guild_id].channel
             if current_channel.id != voice_channel.id:
-                # Bot is in different channel
+                # Bot is in different channel - mark as busy
+                update_bot_status(guild_id, is_busy=True)
                 embed = discord.Embed(
-                    title="⚠️ Tôi đang bận rồi!",
-                    description=f"🔊 Tôi đang hoạt động ở: **{current_channel.name}**\n\n💡 Vào channel đó hoặc đợi tôi rảnh nhé!",
+                    title=f"⚠️ Bot {BOT_PRIORITY} đang bận!",
+                    description=f"🔊 Tôi đang hoạt động ở: **{current_channel.name}**\n\n💡 Bot khác sẽ xử lý request của bạn!",
                     color=discord.Color.orange()
                 )
                 await ctx.send(embed=embed)
                 return
+        
+        # 🎯 Mark this bot as busy BEFORE connecting
+        update_bot_status(guild_id, is_busy=True)
         
         # Connect to voice channel if not already connected
         if guild_id not in voice_clients or not voice_clients[guild_id].is_connected():
@@ -340,7 +424,7 @@ async def text_to_speech(ctx, *, text: str = None):
             voice_clients[guild_id] = voice_client
             
             embed = discord.Embed(
-                title="🔊 Đã kết nối",
+                title=f"🔊 Bot {BOT_PRIORITY} đã kết nối",
                 description=f"Đã kết nối vào **{voice_channel.name}**",
                 color=discord.Color.green()
             )
@@ -537,8 +621,11 @@ async def leave_voice(ctx):
     if guild_id in last_activity:
         del last_activity[guild_id]
     
+    # 🎯 Mark bot as not busy
+    update_bot_status(guild_id, is_busy=False)
+    
     embed = discord.Embed(
-        title="👋 Đã rời khỏi",
+        title=f"👋 Bot {BOT_PRIORITY} đã rời khỏi",
         description=f"Đã rời khỏi **{channel_name}**",
         color=discord.Color.green()
     )
@@ -642,6 +729,9 @@ async def cleanup_inactive_connections():
             tts_queue[guild_id].clear()
         if guild_id in processing:
             processing[guild_id] = False
+        
+        # 🎯 Mark bot as not busy
+        update_bot_status(guild_id, is_busy=False)
 
 @bot.event
 async def on_command_error(ctx, error):

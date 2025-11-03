@@ -388,13 +388,18 @@ Hành động: 1. Vào Discord Developer Portal
 
 ---
 
-## 🤖 Multi-Bot: Join nhiều voice room cùng lúc
+## 🤖 Multi-Bot: Join nhiều voice room cùng lúc (Smart Priority)
 
 **Khi nào cần:** Bạn muốn bot ở nhiều voice channel cùng lúc trong 1 server.
 
 **Giới hạn Discord API:** 1 bot chỉ join được 1 voice channel/server.
 
-**Giải pháp:** Tạo nhiều Discord Application (nhiều bot), chạy nhiều instance code.
+**Giải pháp:** Tạo nhiều Discord Application (nhiều bot), chạy nhiều instance code với **priority system**.
+
+**⚡ Cơ chế Smart Priority:**
+- Bot 1 (ưu tiên cao nhất) sẽ xử lý request đầu tiên
+- Khi Bot 1 đang bận (ở voice channel khác), Bot 2 tự động nhận request
+- Các bot tự động phối hợp qua file `bot_status.json` (không cần setup thêm gì!)
 
 ### 🔧 Setup Multi-Bot (Ví dụ: 3 bot)
 
@@ -465,14 +470,34 @@ Terminal 2: 📝 Loaded environment from: .env.bot2
 Terminal 3: 📝 Loaded environment from: .env.bot3
 ```
 
-#### Bước 4: Sử dụng trên Discord
+#### Bước 4: Sử dụng trên Discord (Smart Priority)
 
-Giờ bạn có thể:
-- Join voice room 1 → `!tts xin chào` (Bot #1 đọc)
-- Join voice room 2 → `!tts hello` (Bot #2 đọc)
-- Join voice room 3 → `!tts こんにちは` (Bot #3 đọc)
+**Scenario 1: Chỉ 1 voice room hoạt động**
+```
+User A ở Voice Room 1: !tts xin chào
+→ Bot 1 respond (ưu tiên cao nhất)
+```
 
-**3 bot hoạt động độc lập** trong 3 voice channel khác nhau cùng 1 server!
+**Scenario 2: 2 voice rooms cùng lúc**
+```
+User A ở Voice Room 1: !tts xin chào
+→ Bot 1 respond và join Room 1
+
+User B ở Voice Room 2: !tts hello
+→ Bot 1 đang bận → Bot 2 tự động respond và join Room 2
+```
+
+**Scenario 3: 3 voice rooms cùng lúc**
+```
+Room 1 → Bot 1 xử lý
+Room 2 → Bot 2 xử lý (Bot 1 bận)
+Room 3 → Bot 3 xử lý (Bot 1 & 2 bận)
+```
+
+**✨ Ưu điểm:**
+- User không cần quan tâm bot nào respond
+- Hệ thống tự động chọn bot rảnh
+- Ưu tiên bot số thấp trước (Bot 1 > Bot 2 > Bot 3)
 
 ### 🎯 Tips Multi-Bot
 
