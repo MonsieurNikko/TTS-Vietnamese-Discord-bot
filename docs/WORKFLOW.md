@@ -151,23 +151,23 @@ Phải test **TẤT CẢ** các bước này trên DEV:
 ### Test cơ bản (15 phút)
 ```
 □ Bot connect thành công (kiểm tra log)
-□ !tts xin chào mọi người (tiếng Việt)
-□ !tts en hello world (tiếng Anh)
-□ !tts ja こんにちは (tiếng Nhật)
-□ !tts ko 안녕하세요 (tiếng Hàn)
-□ !tts fr bonjour (tiếng Pháp)
-□ !tts de guten tag (tiếng Đức)
-□ !tts es hola (tiếng Tây Ban Nha)
-□ !tts zh 你好 (tiếng Trung)
+□ tts xin chào mọi người (tiếng Việt)
+□ tts en hello world (tiếng Anh)
+□ tts ja こんにちは (tiếng Nhật)
+□ tts ko 안녕하세요 (tiếng Hàn)
+□ tts fr bonjour (tiếng Pháp)
+□ tts de guten tag (tiếng Đức)
+□ tts es hola (tiếng Tây Ban Nha)
+□ tts zh 你好 (tiếng Trung)
 ```
 
 ### Test lệnh quản lý (5 phút)
 ```
-□ !skip - bỏ qua TTS
-□ !queue - xem hàng đợi
-□ !clear - xóa hàng đợi
-□ !leave - bot rời voice
-□ !huongdan - hiển thị help
+□ skip - bỏ qua TTS
+□ queue - xem hàng đợi
+□ clear - xóa hàng đợi
+□ leave - bot rời voice
+□ huongdan - hiển thị help
 ```
 
 ### Test edge cases (10 phút)
@@ -175,9 +175,9 @@ Phải test **TẤT CẢ** các bước này trên DEV:
 □ Bot tự rời khi không còn ai trong voice channel
 □ Bot tự rời sau 1 phút không hoạt động
 □ Gửi văn bản >200 ký tự (phải báo lỗi)
-□ 2-3 người cùng dùng !tts (queue hoạt động đúng)
+□ 2-3 người cùng dùng tts (queue hoạt động đúng)
 □ User rời voice giữa chừng (bot không crash)
-□ Gửi !tts mà không ở voice channel (phải báo lỗi)
+□ Gửi tts mà không ở voice channel (phải báo lỗi)
 ```
 
 ### Quan sát logs (5 phút)
@@ -234,9 +234,9 @@ git push origin main
 **Trên Discord:**
 1. Bot production phải online (màu xanh)
 2. Test nhanh 2-3 lệnh cơ bản:
-   - `!tts xin chào`
-   - `!tts en hello`
-   - `!huongdan`
+   - `tts xin chào`
+   - `tts en hello`
+   - `huongdan`
 
 **Monitor production 1 giờ đầu** để đảm bảo không có issue.
 
@@ -493,16 +493,16 @@ python src\tts_bot.py
 
 **Scenario 1: Chỉ 1 voice room hoạt động**
 ```
-User A ở Voice Room 1: !tts xin chào
+User A ở Voice Room 1: tts xin chào
 → Bot 1 respond (ưu tiên cao nhất)
 ```
 
 **Scenario 2: 2 voice rooms cùng lúc**
 ```
-User A ở Voice Room 1: !tts xin chào
+User A ở Voice Room 1: tts xin chào
 → Bot 1 respond và join Room 1
 
-User B ở Voice Room 2: !tts hello
+User B ở Voice Room 2: tts hello
 → Bot 1 đang bận → Bot 2 tự động respond và join Room 2
 ```
 

@@ -85,8 +85,9 @@ class TTSBotInstance:
         intents.message_content = True
         intents.voice_states = True
         
+        # No prefix needed - bot responds to direct commands like "tts" or "huongdan"
         self.bot = commands.Bot(
-            command_prefix='!',
+            command_prefix='',
             intents=intents,
             help_command=None
         )
@@ -423,17 +424,17 @@ class TTSBotInstance:
         embed.add_field(
             name="🎤 Lệnh cơ bản",
             value=(
-                "`!tts <text>` - Đọc văn bản (mặc định tiếng Việt)\n"
-                "`!tts en <text>` - Đọc tiếng Anh\n"
-                "`!tts ja <text>` - Đọc tiếng Nhật\n"
-                "`!tts ko <text>` - Đọc tiếng Hàn"
+                "`tts <text>` - Đọc văn bản (mặc định tiếng Việt)\n"
+                "`tts en <text>` - Đọc tiếng Anh\n"
+                "`tts ja <text>` - Đọc tiếng Nhật\n"
+                "`tts ko <text>` - Đọc tiếng Hàn"
             ),
             inline=False
         )
         
         embed.add_field(
             name="🎵 Quản lý",
-            value="`!skip` `!queue` `!clear` `!leave`",
+            value="`skip` `queue` `clear` `leave`",
             inline=False
         )
         
