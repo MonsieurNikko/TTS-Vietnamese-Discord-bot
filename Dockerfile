@@ -15,7 +15,13 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application
 COPY src/ ./src/
-COPY .env .env
+
+# Copy environment files (single bot OR multi-bot)
+# For single bot: .env
+# For multi-bot: .env.bot1, .env.bot2, .env.bot3
+COPY .env* ./
 
 # Run bot
-CMD ["python", "src/tts_bot.py"]
+# Default: Multi-bot orchestrator (runs all bots in one process)
+# To run single bot with specific config: set ENV variable (e.g., ENV=bot1)
+CMD ["python", "src/tts_bot_multi.py"]

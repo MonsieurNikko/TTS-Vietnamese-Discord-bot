@@ -437,7 +437,37 @@ Discord_Token=TOKEN_CUA_BOT_2_O_DAY
 Discord_Token=TOKEN_CUA_BOT_3_O_DAY
 ```
 
-#### Bước 3: Chạy 3 terminal song song
+#### Bước 3: Chạy Multi-Bot
+
+**Có 2 cách chạy:**
+
+**🌟 Cách 1: Chạy TẤT CẢ bot trong 1 terminal (Khuyến nghị - dùng cho Cybrance)**
+
+```powershell
+cd "C:\Users\duywi\Documents\DiscordBot\Loa phát thanh\TTS-Vietnamese-Discord-bot"
+.\venv\Scripts\Activate.ps1
+python src\tts_bot_multi.py
+```
+
+**Output mong đợi:**
+```
+🚀 Starting Multi-Bot TTS Orchestrator...
+📝 Discovered: .env.bot1 (Priority 1)
+📝 Discovered: .env.bot2 (Priority 2)
+📊 Found 2 bot(s)
+✅ All bots initialized with priority coordination
+🤖 Loa phát thanh #1 online! Priority: 1
+🤖 Loa phát thanh #2 online! Priority: 2
+```
+
+**Ưu điểm:**
+- ✅ Chỉ cần 1 terminal/container
+- ✅ Hoàn hảo cho Cybrance (1 process chạy nhiều bot)
+- ✅ Tự động phối hợp priority giữa các bot
+
+---
+
+**📟 Cách 2: Chạy từng bot riêng (Local testing)**
 
 **Terminal 1:** (Bot #1)
 ```powershell
@@ -455,20 +485,9 @@ $env:ENV="bot2"
 python src\tts_bot.py
 ```
 
-**Terminal 3:** (Bot #3)
-```powershell
-cd "C:\Users\duywi\Documents\DiscordBot\Loa phát thanh\TTS-Vietnamese-Discord-bot"
-.\venv\Scripts\Activate.ps1
-$env:ENV="bot3"
-python src\tts_bot.py
-```
-
-**Output mong đợi:**
-```
-Terminal 1: 📝 Loaded environment from: .env.bot1
-Terminal 2: 📝 Loaded environment from: .env.bot2
-Terminal 3: 📝 Loaded environment from: .env.bot3
-```
+**Ưu điểm:**
+- ✅ Dễ debug từng bot riêng
+- ✅ Dùng file-based coordination (bot_status.json)
 
 #### Bước 4: Sử dụng trên Discord (Smart Priority)
 
@@ -515,10 +534,18 @@ Room 3 → Bot 3 xử lý (Bot 1 & 2 bận)
 - Không commit token lên GitHub
 ```
 
-**Hosting trên Cybrance (Advanced):**
-- Cybrance miễn phí = 1 container = 1 bot
-- Muốn 3 bot → Cần 3 container/service riêng
-- Mỗi container set ENV variable khác nhau (bot1/bot2/bot3)
+**Hosting trên Cybrance:**
+
+**Option A: Multi-Bot Orchestrator (Khuyến nghị)**
+- 1 container chạy **TẤT CẢ bot** cùng lúc
+- Dockerfile CMD: `python src/tts_bot_multi.py`
+- Tạo `.env.bot1`, `.env.bot2`, `.env.bot3` trong project
+- Push lên GitHub → Cybrance auto-deploy → 3 bot cùng chạy!
+
+**Option B: Separate Containers (Phức tạp hơn)**
+- Cần 3 container/service riêng trên Cybrance
+- Mỗi container set ENV variable: `ENV=bot1`, `ENV=bot2`, `ENV=bot3`
+- Dockerfile CMD: `python src/tts_bot.py`
 
 ---
 
