@@ -11,9 +11,13 @@ ENV/
 dist/
 build/
 
-# Environment
+# Environment (all .env files except examples)
 .env
 .env.local
+.env.dev
+.env.prod
+.env.*
+!.env.*.example
 
 # Logs
 *.log

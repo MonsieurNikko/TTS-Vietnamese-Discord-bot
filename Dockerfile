@@ -14,7 +14,8 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application
-COPY . .
+COPY src/ ./src/
+COPY .env .env
 
 # Run bot
-CMD ["python", "tts_bot.py"]
+CMD ["python", "src/tts_bot.py"]

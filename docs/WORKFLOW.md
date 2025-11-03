@@ -18,6 +18,39 @@
 
 ---
 
+## 📁 Cấu trúc thư mục
+
+```
+TTS-Vietnamese-Discord-bot/
+├── src/                      # Source code
+│   └── tts_bot.py           # Bot chính (dùng chung DEV & PROD)
+├── config/                   # Configuration templates
+│   ├── .env.dev.example     # Template cho DEV
+│   └── .env.prod.example    # Template cho PROD
+├── scripts/                  # Helper scripts
+│   └── run_dev.ps1          # Script chạy DEV tự động
+├── docs/                     # Documentation
+│   ├── WORKFLOW.md          # File này - hướng dẫn toàn bộ
+│   ├── README.md            # Mô tả project
+│   └── DEPLOY.md            # Hướng dẫn deploy
+├── venv/                     # Python virtual environment (Git-ignored)
+├── .env.dev                  # DEV token (Git-ignored, tạo từ template)
+├── .env.prod                 # PROD token backup (Git-ignored, optional)
+├── .env                      # Production config (Git-ignored)
+├── .gitignore               # Ignore sensitive files
+├── requirements.txt         # Python dependencies
+├── Dockerfile               # Container config
+├── docker-compose.yml       # Docker Compose config
+└── README.md                # Main README (copy của docs/README.md)
+```
+
+**Lưu ý quan trọng:**
+- ✅ Code chỉ có 1 file: `src/tts_bot.py` (dùng chung)
+- ✅ Token khác nhau qua file `.env.dev` và `.env.prod`
+- ✅ Không cần duplicate code cho từng environment
+
+---
+
 ## 🔧 Setup lần đầu
 
 ### 1. Tạo Discord Bot cho DEV (miễn phí)
@@ -82,25 +115,40 @@ pip install -r requirements.txt
 
 ## 🧪 Quy trình Development
 
-### Chạy Bot DEV trên PC (không đụng file .env)
+### Chạy Bot DEV trên PC
 
-Mỗi lần code/test tính năng mới:
+**Cách 1: Script tự động (khuyến nghị)**
+
+```powershell
+# Lần đầu: Tạo file .env.dev từ template
+Copy-Item config\.env.dev.example .env.dev
+# Mở .env.dev và thay YOUR_DEV_DISCORD_TOKEN_HERE bằng token thật
+
+# Chạy bot DEV (1 lệnh duy nhất!)
+.\scripts\run_dev.ps1
+```
+
+Script sẽ tự động:
+- Activate venv
+- Load `.env.dev` 
+- Chạy bot từ `src/tts_bot.py`
+
+**Cách 2: Chạy thủ công**
 
 ```powershell
 # 1. Activate virtual environment
 .\venv\Scripts\Activate.ps1
 
-# 2. Set token DEV tạm thời (thay YOUR_DEV_TOKEN)
-$env:Discord_Token = "YOUR_DEV_TOKEN_HERE"
+# 2. Load .env.dev
+Get-Content .env.dev | ForEach-Object {
+    if ($_ -match '^([^=]+)=(.*)$') {
+        Set-Item -Path "env:$($matches[1])" -Value $matches[2]
+    }
+}
 
 # 3. Chạy bot
-python tts_bot.py
+python src\tts_bot.py
 ```
-
-**Giải thích:**
-- `$env:Discord_Token` chỉ tồn tại trong phiên PowerShell hiện tại
-- Không ảnh hưởng file `.env` (production token vẫn an toàn)
-- Đóng terminal → token DEV tự động mất
 
 **Để dừng bot:** `Ctrl + C`
 
@@ -278,9 +326,17 @@ git push -f origin main
 
 ### Chạy DEV local
 ```powershell
+# Khuyến nghị: Dùng script
+.\scripts\run_dev.ps1
+
+# Hoặc thủ công:
 .\venv\Scripts\Activate.ps1
-$env:Discord_Token = "YOUR_DEV_TOKEN"
-python tts_bot.py
+Get-Content .env.dev | ForEach-Object {
+    if ($_ -match '^([^=]+)=(.*)$') {
+        Set-Item -Path "env:$($matches[1])" -Value $matches[2]
+    }
+}
+python src\tts_bot.py
 ```
 
 ### Deploy Production
