@@ -31,6 +31,8 @@ def load_environment():
         env_files.append(os.path.join(root_dir, '.env.dev'))
     elif env_mode == 'prod':
         env_files.append(os.path.join(root_dir, '.env.prod'))
+    elif env_mode.startswith('bot'):  # bot1, bot2, bot3, etc.
+        env_files.append(os.path.join(root_dir, f'.env.{env_mode}'))
     else:
         # Auto-detect: prefer .env.dev if exists (development mode)
         env_files.append(os.path.join(root_dir, '.env.dev'))
@@ -419,7 +421,7 @@ async def text_to_speech(ctx, *, text: str = None):
         )
         await ctx.send(embed=embed)
 
-@bot.command(name='skip', aliases=['s', 'next'])
+@bot.command(name='skip')
 async def skip_tts(ctx):
     """Skip current TTS"""
     guild_id = ctx.guild.id
@@ -451,7 +453,7 @@ async def skip_tts(ctx):
     
     await ctx.send(embed=embed)
 
-@bot.command(name='queue', aliases=['q'])
+@bot.command(name='queue')
 async def show_queue(ctx):
     """Show TTS queue"""
     guild_id = ctx.guild.id
@@ -486,7 +488,7 @@ async def show_queue(ctx):
     
     await ctx.send(embed=embed)
 
-@bot.command(name='clear', aliases=['c'])
+@bot.command(name='clear')
 async def clear_queue(ctx):
     """Clear TTS queue"""
     guild_id = ctx.guild.id
@@ -510,7 +512,7 @@ async def clear_queue(ctx):
     )
     await ctx.send(embed=embed)
 
-@bot.command(name='leave', aliases=['disconnect', 'bye'])
+@bot.command(name='leave')
 async def leave_voice(ctx):
     """Leave voice channel"""
     guild_id = ctx.guild.id

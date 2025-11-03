@@ -10,11 +10,13 @@
 |-------------|-----------|-----------|----------------|----------|
 | **Development** | PC local | DEV Token | Server test riêng | Code & test tính năng |
 | **Production** | Cybrance | PROD Token | Server chính | User thật sử dụng |
+| **Multi-Bot** | PC/Cybrance | BOT1/2/3 Tokens | Cùng 1 server | Join nhiều voice room cùng lúc |
 
 **Nguyên tắc vàng:**
 - ✅ Luôn test trên DEV trước
 - ❌ Không bao giờ code trực tiếp trên production
 - ✅ Deploy production chỉ khi DEV đã test kỹ ≥30 phút
+- 🎯 Dùng multi-bot khi cần bot ở nhiều voice channel cùng lúc (1 server)
 
 ---
 
@@ -381,6 +383,117 @@ Hành động: 1. Vào Discord Developer Portal
           3. Update token mới trên Cybrance
           4. Xóa commit chứa token cũ khỏi Git history
 ```
+
+---
+
+---
+
+## 🤖 Multi-Bot: Join nhiều voice room cùng lúc
+
+**Khi nào cần:** Bạn muốn bot ở nhiều voice channel cùng lúc trong 1 server.
+
+**Giới hạn Discord API:** 1 bot chỉ join được 1 voice channel/server.
+
+**Giải pháp:** Tạo nhiều Discord Application (nhiều bot), chạy nhiều instance code.
+
+### 🔧 Setup Multi-Bot (Ví dụ: 3 bot)
+
+#### Bước 1: Tạo 3 Discord Applications
+
+Truy cập: https://discord.com/developers/applications
+
+```
+Bot 1: "Loa phát thanh #1"
+Bot 2: "Loa phát thanh #2"
+Bot 3: "Loa phát thanh #3"
+```
+
+Mỗi bot làm giống setup DEV/PROD:
+- Bật **Message Content Intent**
+- Copy token của từng bot
+- Invite vào server (dùng OAuth2 URL Generator)
+
+#### Bước 2: Tạo file `.env` cho từng bot
+
+Trong thư mục gốc project:
+
+**`.env.bot1`** (Voice Room 1)
+```env
+Discord_Token=TOKEN_CUA_BOT_1_O_DAY
+```
+
+**`.env.bot2`** (Voice Room 2)
+```env
+Discord_Token=TOKEN_CUA_BOT_2_O_DAY
+```
+
+**`.env.bot3`** (Voice Room 3)
+```env
+Discord_Token=TOKEN_CUA_BOT_3_O_DAY
+```
+
+#### Bước 3: Chạy 3 terminal song song
+
+**Terminal 1:** (Bot #1)
+```powershell
+cd "C:\Users\duywi\Documents\DiscordBot\Loa phát thanh\TTS-Vietnamese-Discord-bot"
+.\venv\Scripts\Activate.ps1
+$env:ENV="bot1"
+python src\tts_bot.py
+```
+
+**Terminal 2:** (Bot #2)
+```powershell
+cd "C:\Users\duywi\Documents\DiscordBot\Loa phát thanh\TTS-Vietnamese-Discord-bot"
+.\venv\Scripts\Activate.ps1
+$env:ENV="bot2"
+python src\tts_bot.py
+```
+
+**Terminal 3:** (Bot #3)
+```powershell
+cd "C:\Users\duywi\Documents\DiscordBot\Loa phát thanh\TTS-Vietnamese-Discord-bot"
+.\venv\Scripts\Activate.ps1
+$env:ENV="bot3"
+python src\tts_bot.py
+```
+
+**Output mong đợi:**
+```
+Terminal 1: 📝 Loaded environment from: .env.bot1
+Terminal 2: 📝 Loaded environment from: .env.bot2
+Terminal 3: 📝 Loaded environment from: .env.bot3
+```
+
+#### Bước 4: Sử dụng trên Discord
+
+Giờ bạn có thể:
+- Join voice room 1 → `!tts xin chào` (Bot #1 đọc)
+- Join voice room 2 → `!tts hello` (Bot #2 đọc)
+- Join voice room 3 → `!tts こんにちは` (Bot #3 đọc)
+
+**3 bot hoạt động độc lập** trong 3 voice channel khác nhau cùng 1 server!
+
+### 🎯 Tips Multi-Bot
+
+**Đặt tên bot dễ nhận biết:**
+```
+"Loa phát thanh #1" → Avatar màu đỏ
+"Loa phát thanh #2" → Avatar màu xanh
+"Loa phát thanh #3" → Avatar màu vàng
+```
+
+**Quản lý token:**
+```
+- Lưu 3 token vào file riêng biệt (.env.bot1/2/3)
+- Git-ignored tự động (pattern .env.*)
+- Không commit token lên GitHub
+```
+
+**Hosting trên Cybrance (Advanced):**
+- Cybrance miễn phí = 1 container = 1 bot
+- Muốn 3 bot → Cần 3 container/service riêng
+- Mỗi container set ENV variable khác nhau (bot1/bot2/bot3)
 
 ---
 
