@@ -23,12 +23,10 @@
 ```
 TTS-Vietnamese-Discord-bot/
 ├── src/                      # Source code
-│   └── tts_bot.py           # Bot chính (dùng chung DEV & PROD)
+│   └── tts_bot.py           # Bot chính (auto-detect environment)
 ├── config/                   # Configuration templates
 │   ├── .env.dev.example     # Template cho DEV
 │   └── .env.prod.example    # Template cho PROD
-├── scripts/                  # Helper scripts
-│   └── run_dev.ps1          # Script chạy DEV tự động
 ├── docs/                     # Documentation
 │   ├── WORKFLOW.md          # File này - hướng dẫn toàn bộ
 │   ├── README.md            # Mô tả project
@@ -117,40 +115,30 @@ pip install -r requirements.txt
 
 ### Chạy Bot DEV trên PC
 
-**Cách 1: Script tự động (khuyến nghị)**
-
 ```powershell
 # Lần đầu: Tạo file .env.dev từ template
 Copy-Item config\.env.dev.example .env.dev
-# Mở .env.dev và thay YOUR_DEV_DISCORD_TOKEN_HERE bằng token thật
+notepad .env.dev  # Mở và paste token DEV
 
-# Chạy bot DEV (1 lệnh duy nhất!)
-.\scripts\run_dev.ps1
-```
-
-Script sẽ tự động:
-- Activate venv
-- Load `.env.dev` 
-- Chạy bot từ `src/tts_bot.py`
-
-**Cách 2: Chạy thủ công**
-
-```powershell
-# 1. Activate virtual environment
+# Activate venv
 .\venv\Scripts\Activate.ps1
 
-# 2. Load .env.dev
-Get-Content .env.dev | ForEach-Object {
-    if ($_ -match '^([^=]+)=(.*)$') {
-        Set-Item -Path "env:$($matches[1])" -Value $matches[2]
-    }
-}
-
-# 3. Chạy bot
+# Chạy bot (tự động nhận .env.dev!)
 python src\tts_bot.py
 ```
 
+**Bot tự động:**
+- ✅ Phát hiện file `.env.dev` nếu có
+- ✅ Load token DEV
+- ✅ Hiển thị: `📝 Loaded environment from: .env.dev`
+
 **Để dừng bot:** `Ctrl + C`
+
+**Để force chạy PROD local (test):**
+```powershell
+$env:ENV = "prod"
+python src\tts_bot.py  # Load .env.prod thay vì .env.dev
+```
 
 ---
 
@@ -326,17 +314,8 @@ git push -f origin main
 
 ### Chạy DEV local
 ```powershell
-# Khuyến nghị: Dùng script
-.\scripts\run_dev.ps1
-
-# Hoặc thủ công:
 .\venv\Scripts\Activate.ps1
-Get-Content .env.dev | ForEach-Object {
-    if ($_ -match '^([^=]+)=(.*)$') {
-        Set-Item -Path "env:$($matches[1])" -Value $matches[2]
-    }
-}
-python src\tts_bot.py
+python src\tts_bot.py  # Tự động load .env.dev
 ```
 
 ### Deploy Production
